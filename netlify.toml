@@ -1,0 +1,7 @@
+[build]
+  command = "bun run build"
+
+[dev]
+  command = "bun run dev"
+  targetPort = 5173
+  framework = "#custom"

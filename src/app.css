@@ -1,0 +1,96 @@
+@import 'tailwindcss';
+
+/*
+  EndToEnd Encrypt — design system
+  Style: "vault minimalism" — near-black surfaces, a single confident
+  cyan accent reserved for encryption-active states, mono type for
+  anything cryptographic (hashes, fingerprints, key IDs) so it reads
+  as data, not decoration.
+*/
+
+@theme {
+	/* Surfaces */
+	--color-bg: #08090b;
+	--color-surface: #0e1013;
+	--color-surface-2: #15181c;
+	--color-surface-3: #1d2126;
+	--color-border: #23272d;
+	--color-border-strong: #2e333a;
+
+	/* Text */
+	--color-text-primary: #eef1f4;
+	--color-text-secondary: #9aa3ad;
+	--color-text-tertiary: #5d656e;
+
+	/* Accent — encryption / security signal, used sparingly */
+	--color-accent: #34e2c4;
+	--color-accent-dim: #1c7d6c;
+	--color-accent-bg: #0f1f1c;
+
+	/* Strength signal scale (weak -> strong) */
+	--color-strength-weak: #f3534a;
+	--color-strength-fair: #f0a23c;
+	--color-strength-good: #e8d23c;
+	--color-strength-strong: #34e2c4;
+
+	/* Status */
+	--color-danger: #f3534a;
+	--color-danger-bg: #241312;
+	--color-warning: #f0a23c;
+	--color-warning-bg: #221a0f;
+	--color-success: #34e2c4;
+
+	/* Type */
+	--font-sans:
+		'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+	/* Radius */
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 16px;
+
+	/* Motion — see ek-design layer for usage */
+	--ease-out-strong: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-in-out-strong: cubic-bezier(0.65, 0, 0.35, 1);
+	--ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html {
+	background: var(--color-bg);
+	color: var(--color-text-primary);
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+}
+
+body {
+	min-height: 100dvh;
+}
+
+::selection {
+	background: var(--color-accent-dim);
+	color: var(--color-bg);
+}
+
+/* Visible focus ring everywhere — accessibility, not optional */
+:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+.font-mono-data {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.01em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
+	}
+}

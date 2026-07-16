@@ -1,0 +1,39 @@
+{
+  "name": "endtoend-encrypt",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-netlify": "^5.0.0",
+    "@sveltejs/kit": "^2.9.0",
+    "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "drizzle-kit": "^0.28.0",
+    "svelte": "^5.16.0",
+    "svelte-check": "^4.1.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^5.4.11"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "@node-rs/argon2": "^2.0.2",
+    "@netlify/blobs": "^8.1.0",
+    "argon2-browser": "^1.18.0",
+    "drizzle-orm": "^0.38.0",
+    "jose": "^5.9.6",
+    "libsodium-wrappers-sumo": "0.7.13",
+    "lucide-svelte": "^0.468.0",
+    "nanoid": "^5.0.9",
+    "zod": "^3.24.1"
+  },
+  "type": "module"
+}
