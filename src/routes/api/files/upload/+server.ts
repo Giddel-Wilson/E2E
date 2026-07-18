@@ -1,33 +1,41 @@
 import { json, error } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db, encryptedFiles, fileMetadata } from '$server/db';
 import { requireUser } from '$server/auth';
 import { logAccess } from '$server/access-log';
 import { filesStore } from '$server/blob-store';
+import { parseBody } from '$server/validate';
+import { uploadInitSchema, uploadFinalizeSchema } from '$server/schemas';
+import { MAX_FILE_SIZE_BYTES } from '$lib/shared/limits';
 import type { RequestHandler } from './$types';
-
-// In-memory chunk buffer keyed by fileId, scoped to a single invocation.
-// On Vercel's serverless runtime this is fine because each upload's PUT
-// calls for small files land on the same warm instance in quick
-// succession; for very large files chunks are flushed to blob storage
-// immediately rather than held in memory (see PUT handler below).
-const pendingUploads = new Map<string, { chunksReceived: number; totalChunks: number }>();
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = requireUser(locals);
-	const body = await request.json();
+	const rawBody = await request.json();
 
-	if (body.action === 'init') {
+	if (rawBody.action === 'init') {
+		const body = parseBody(uploadInitSchema, rawBody);
+
+		// Defense in depth — the client already checks this before
+		// encrypting, but a client can't be trusted to enforce its own
+		// limits, so it's re-checked here against the declared size.
+		if (body.ciphertextSizeBytesEstimate > MAX_FILE_SIZE_BYTES + 1024) {
+			error(413, `File exceeds the ${MAX_FILE_SIZE_BYTES / (1024 * 1024)} MB limit`);
+		}
+
 		const [row] = await db
 			.insert(encryptedFiles)
 			.values({
 				ownerId: user.id,
 				storageKey: '', // set after first chunk lands
-				ciphertextSizeBytes: body.ciphertextSizeBytesEstimate ?? 0,
+				ciphertextSizeBytes: body.ciphertextSizeBytesEstimate,
 				fileAlgo: body.fileAlgo,
 				fileIv: body.fileIv,
 				wrappedFileKey: body.wrappedFileKey,
 				keyAlgo: body.keyAlgo,
+				keyWrapIv: body.wrapIv ?? null,
+				keyWrapEphemeralPublicKeyJwk: body.ephemeralPublicKeyJwk ?? null,
+				totalChunks: body.totalChunks,
 				ciphertextSha256: '' // set on finalize
 			})
 			.returning({ id: encryptedFiles.id });
@@ -41,19 +49,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			strengthLabel: body.metadata.strengthLabel
 		});
 
-		pendingUploads.set(row.id, { chunksReceived: 0, totalChunks: body.totalChunks });
 		await logAccess({ fileId: row.id, actorId: user.id, action: 'UPLOAD', success: true });
 
 		return json({ fileId: row.id });
 	}
 
-	if (body.action === 'finalize') {
-		const { fileId, ciphertextSha256 } = body;
+	if (rawBody.action === 'finalize') {
+		const { fileId, ciphertextSha256 } = parseBody(uploadFinalizeSchema, rawBody);
 		await db
 			.update(encryptedFiles)
 			.set({ ciphertextSha256 })
-			.where(eq(encryptedFiles.id, fileId));
-		pendingUploads.delete(fileId);
+			.where(and(eq(encryptedFiles.id, fileId), eq(encryptedFiles.ownerId, user.id)));
 		return json({ ok: true });
 	}
 
@@ -65,6 +71,15 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	const fileId = request.headers.get('X-File-Id');
 	const chunkIndex = Number(request.headers.get('X-Chunk-Index') ?? '0');
 	if (!fileId) error(400, 'Missing X-File-Id');
+	if (Number.isNaN(chunkIndex) || chunkIndex < 0) error(400, 'Invalid X-Chunk-Index');
+
+	// Verify this file was actually created by the requester before
+	// writing anything to blob storage under their namespace.
+	const [file] = await db
+		.select({ id: encryptedFiles.id })
+		.from(encryptedFiles)
+		.where(and(eq(encryptedFiles.id, fileId), eq(encryptedFiles.ownerId, user.id)));
+	if (!file) error(404, 'Upload session not found — call init first');
 
 	const ciphertext = new Uint8Array(await request.arrayBuffer());
 
@@ -76,7 +91,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	// authenticated download route, not a guessable public link.
 	const store = filesStore();
 	const key = `${user.id}/${fileId}/chunk-${chunkIndex}`;
-	await store.set(key, ciphertext);
+	await store.set(key, ciphertext.buffer as ArrayBuffer);
 
 	if (chunkIndex === 0) {
 		await db
@@ -84,9 +99,6 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 			.set({ storageKey: `${user.id}/${fileId}` })
 			.where(eq(encryptedFiles.id, fileId));
 	}
-
-	const state = pendingUploads.get(fileId);
-	if (state) state.chunksReceived += 1;
 
 	return json({ ok: true });
 };

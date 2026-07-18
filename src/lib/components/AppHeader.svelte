@@ -7,7 +7,8 @@
 	const links = [
 		{ href: '/dashboard', label: 'Vault' },
 		{ href: '/dashboard/logs', label: 'Access logs' },
-		{ href: '/settings/keys', label: 'Keys' }
+		{ href: '/settings/keys', label: 'Keys' },
+		{ href: '/settings/account', label: 'Account' }
 	];
 
 	async function signOut() {

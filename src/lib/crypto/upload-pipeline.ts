@@ -106,11 +106,14 @@ export async function encryptAndUploadFile({
 		bytesDone += plainChunk.length;
 		onProgress?.({ phase: 'uploading', percent: 50 + (bytesDone / file.size) * 40, bytesDone, bytesTotal: file.size });
 
-		await fetch(`/api/files/upload`, {
+		const putRes = await fetch(`/api/files/upload`, {
 			method: 'PUT',
 			headers: { 'Content-Type': 'application/octet-stream', 'X-File-Id': fileId, 'X-Chunk-Index': String(i) },
 			body: cipherChunk as BodyInit
 		});
+		if (!putRes.ok) {
+			throw new Error(`Failed to upload chunk ${i + 1} of ${totalChunks} — please try again`);
+		}
 	}
 
 	// 5. Compute ciphertext SHA-256 for integrity verification, finalize.

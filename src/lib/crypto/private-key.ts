@@ -75,3 +75,51 @@ export async function importPublicKey(jwk: JsonWebKey, algo: 'RSA-OAEP' | 'ECDH-
 		algo === 'RSA-OAEP' ? ['encrypt'] : []
 	);
 }
+
+/**
+ * Change-password flow: decrypts the private key with the CURRENT
+ * password and re-wraps it under the NEW one. The in-memory `keyStore`
+ * key can't be reused here — it was imported non-extractable on purpose
+ * (see unwrapPrivateKey), so re-wrapping always requires the current
+ * password again. That's also just good practice: changing a password
+ * should always require proving you know the current one.
+ */
+export async function reWrapPrivateKeyWithNewPassword(
+	wrappedPrivateKey: string,
+	wrappedPrivateKeyIv: string,
+	currentPassword: string,
+	currentKdfParams: KdfParams & { salt: string },
+	newPassword: string,
+	algo: 'RSA-OAEP' | 'ECDH-P256',
+	newKdfParams: KdfParams = DEFAULT_ARGON2ID_PARAMS
+) {
+	const salt = fromBase64(currentKdfParams.salt);
+	const { key } = await deriveKey(currentPassword, currentKdfParams, salt);
+	const unwrapKey = await crypto.subtle.importKey('raw', key as BufferSource, 'AES-GCM', false, ['decrypt']);
+
+	const iv = fromBase64(wrappedPrivateKeyIv);
+	const ciphertext = fromBase64(wrappedPrivateKey);
+
+	let plaintext: ArrayBuffer;
+	try {
+		plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource }, unwrapKey, ciphertext as BufferSource);
+	} catch {
+		throw new Error('Current password is incorrect');
+	}
+
+	const jwk = JSON.parse(new TextDecoder().decode(plaintext));
+
+	// Re-import as extractable so wrapPrivateKey can export it again under
+	// the new password. The non-extractable key used for normal app
+	// operation (in keyStore) is untouched — this is a separate, one-off
+	// key object that only exists for the duration of this function.
+	const extractableKey = await crypto.subtle.importKey(
+		'jwk',
+		jwk,
+		algo === 'RSA-OAEP' ? { name: 'RSA-OAEP', hash: 'SHA-256' } : { name: 'ECDH', namedCurve: 'P-256' },
+		true,
+		algo === 'RSA-OAEP' ? ['decrypt'] : ['deriveBits']
+	);
+
+	return wrapPrivateKey(extractableKey, newPassword, newKdfParams);
+}

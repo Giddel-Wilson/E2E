@@ -96,6 +96,15 @@ export const encryptedFiles = pgTable(
 		// their public key. Server only ever sees ciphertext of this key.
 		wrappedFileKey: text('wrapped_file_key').notNull(),
 		keyAlgo: keyAlgoEnum('key_algo').notNull(),
+		// Only present for ECDH-P256 wrapping: the ephemeral public key and
+		// AES-GCM IV needed to redo the ECDH derivation on download. Null
+		// for RSA-OAEP, which needs neither.
+		keyWrapIv: text('key_wrap_iv'),
+		keyWrapEphemeralPublicKeyJwk: jsonb('key_wrap_ephemeral_public_key_jwk'),
+
+		// Total number of ciphertext chunks, set at upload init so the
+		// download flow knows how many chunk requests to make.
+		totalChunks: integer('total_chunks').notNull().default(1),
 
 		// SHA-256 of ciphertext, computed client-side, used for integrity
 		// verification on download before the browser attempts decryption.

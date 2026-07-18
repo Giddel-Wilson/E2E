@@ -2,6 +2,8 @@ import { json, error } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db, users } from '$server/db';
 import { hashPassword, createSessionCookie } from '$server/auth-server';
+import { parseBody } from '$server/validate';
+import { registerSchema } from '$server/schemas';
 import type { RequestHandler } from './$types';
 
 /**
@@ -14,15 +16,17 @@ import type { RequestHandler } from './$types';
  * already-wrapped ciphertext plus the public key.
  */
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const body = await request.json();
-	const { email, displayName, password, publicKeyJwk, keyAlgo, wrappedPrivateKey, wrappedPrivateKeyIv, privateKeyKdf, privateKeyKdfParams } = body;
-
-	if (!email || !password || password.length < 12) {
-		error(400, 'Email and a password of at least 12 characters are required');
-	}
-	if (!publicKeyJwk || !wrappedPrivateKey || !wrappedPrivateKeyIv) {
-		error(400, 'Missing client-generated key material — keypair must be generated before registering');
-	}
+	const {
+		email,
+		displayName,
+		password,
+		publicKeyJwk,
+		keyAlgo,
+		wrappedPrivateKey,
+		wrappedPrivateKeyIv,
+		privateKeyKdf,
+		privateKeyKdfParams
+	} = parseBody(registerSchema, await request.json());
 
 	const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
 	if (existing) error(409, 'An account with that email already exists');

@@ -4,30 +4,45 @@
 	import { computeStrengthRating } from '$crypto/strength';
 	import { encryptAndUploadFile, type UploadProgress } from '$crypto/upload-pipeline';
 	import type { FileAlgo, KeyAlgo } from '$crypto/types';
+	import { MAX_FILE_SIZE_BYTES, formatBytes } from '$lib/shared/limits';
 
+	// recipientKeyAlgo is NOT a free choice — it must match the actual
+	// algorithm of recipientPublicKey (RSA-OAEP vs ECDH use incompatible
+	// math), so it's a required prop derived from the account's real
+	// keypair rather than a selector in this component.
 	let {
 		recipientPublicKey,
+		recipientKeyAlgo,
 		onUploaded
-	}: { recipientPublicKey: CryptoKey; onUploaded?: (fileId: string) => void } = $props();
+	}: {
+		recipientPublicKey: CryptoKey;
+		recipientKeyAlgo: KeyAlgo;
+		onUploaded?: (fileId: string) => void;
+	} = $props();
 
 	let isDragging = $state(false);
 	let fileAlgo = $state<FileAlgo>('AES-GCM');
-	let keyAlgo = $state<KeyAlgo>('RSA-OAEP');
 	let progress = $state<UploadProgress | null>(null);
 	let errorMsg = $state<string | null>(null);
 	let fileInput: HTMLInputElement;
 
-	const rating = $derived(computeStrengthRating(fileAlgo, keyAlgo));
+	const rating = $derived(computeStrengthRating(fileAlgo, recipientKeyAlgo));
 
 	async function handleFiles(files: FileList | null) {
 		if (!files || files.length === 0) return;
 		const file = files[0];
 		errorMsg = null;
+
+		if (file.size > MAX_FILE_SIZE_BYTES) {
+			errorMsg = `File is ${formatBytes(file.size)}, which is over the ${formatBytes(MAX_FILE_SIZE_BYTES)} limit.`;
+			return;
+		}
+
 		try {
 			const result = await encryptAndUploadFile({
 				file,
 				recipientPublicKey,
-				choice: { fileAlgo, keyAlgo },
+				choice: { fileAlgo, keyAlgo: recipientKeyAlgo },
 				onProgress: (p) => (progress = p)
 			});
 			onUploaded?.(result.fileId);
@@ -46,7 +61,6 @@
 </script>
 
 <div class="space-y-5">
-	<!-- Algorithm selectors -->
 	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
 		<fieldset class="space-y-2">
 			<legend class="text-sm font-medium text-[var(--color-text-secondary)]">File encryption</legend>
@@ -70,27 +84,17 @@
 			</div>
 		</fieldset>
 
-		<fieldset class="space-y-2">
-			<legend class="text-sm font-medium text-[var(--color-text-secondary)]">Key encryption</legend>
-			<div class="flex gap-2" role="radiogroup" aria-label="Key encryption algorithm">
-				{#each ['RSA-OAEP', 'ECDH-P256'] as algo (algo)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={keyAlgo === algo}
-						onclick={() => (keyAlgo = algo as KeyAlgo)}
-						class="min-h-11 flex-1 rounded-[var(--radius-md)] border px-3 py-2 text-sm font-mono-data transition-colors duration-150 cursor-pointer"
-						style="
-							border-color: {keyAlgo === algo ? 'var(--color-accent)' : 'var(--color-border)'};
-							background: {keyAlgo === algo ? 'var(--color-accent-bg)' : 'var(--color-surface-2)'};
-							color: {keyAlgo === algo ? 'var(--color-accent)' : 'var(--color-text-secondary)'};
-						"
-					>
-						{algo === 'ECDH-P256' ? 'ECDH (P-256)' : algo}
-					</button>
-				{/each}
+		<div class="space-y-2">
+			<p class="text-sm font-medium text-[var(--color-text-secondary)]">Key encryption</p>
+			<div
+				class="flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2 text-sm font-mono-data"
+				style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+			>
+				<Lock class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+				{recipientKeyAlgo === 'ECDH-P256' ? 'ECDH (P-256)' : recipientKeyAlgo}
+				<span class="ml-auto text-xs text-[var(--color-text-tertiary)]">from your account key</span>
 			</div>
-		</fieldset>
+		</div>
 	</div>
 
 	<StrengthIndicator {rating} />
@@ -147,7 +151,7 @@
 			</div>
 			<div class="flex items-center gap-1.5 text-xs text-[var(--color-text-tertiary)]">
 				<Lock class="h-3.5 w-3.5" aria-hidden="true" />
-				<span>Zero-knowledge upload</span>
+				<span>Zero-knowledge upload · up to {formatBytes(MAX_FILE_SIZE_BYTES)}</span>
 			</div>
 		{/if}
 	</button>

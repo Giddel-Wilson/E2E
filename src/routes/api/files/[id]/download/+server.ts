@@ -47,6 +47,9 @@ export const GET: RequestHandler = async ({ params, locals, getClientAddress, re
 		fileIv: file.fileIv,
 		keyAlgo: file.keyAlgo,
 		wrappedFileKey: file.wrappedFileKey,
+		keyWrapIv: file.keyWrapIv,
+		keyWrapEphemeralPublicKeyJwk: file.keyWrapEphemeralPublicKeyJwk,
+		totalChunks: file.totalChunks,
 		ciphertextSha256: file.ciphertextSha256,
 		chunkSizeBytes: file.chunkSizeBytes,
 		metadata: meta

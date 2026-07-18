@@ -3,14 +3,34 @@ import { eq } from 'drizzle-orm';
 import { db, users } from '$server/db';
 import { verifyPassword, createSessionCookie } from '$server/auth-server';
 import { logAccess } from '$server/access-log';
+import { recentFailedLoginCount, LOGIN_RATE_LIMIT } from '$server/rate-limit';
+import { parseBody } from '$server/validate';
+import { loginSchema } from '$server/schemas';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
-	const { email, password } = await request.json();
-	if (!email || !password) error(400, 'Email and password are required');
+	const { email, password } = parseBody(loginSchema, await request.json());
+	const ip = getClientAddress();
+
+	// Check BEFORE touching the DB for the user lookup, so lockout applies
+	// uniformly whether the email exists or not — this also protects
+	// against email enumeration via response timing.
+	const recentFailures = await recentFailedLoginCount(ip);
+	if (recentFailures >= LOGIN_RATE_LIMIT.maxAttempts) {
+		error(429, `Too many failed sign-in attempts. Try again in a few minutes.`);
+	}
 
 	const [user] = await db.select().from(users).where(eq(users.email, email));
-	if (!user) error(401, 'Invalid email or password');
+	if (!user) {
+		await logAccess({
+			actorId: null,
+			action: 'DECRYPT_ATTEMPT',
+			success: false,
+			failureReason: 'unknown_email',
+			ipAddress: ip
+		});
+		error(401, 'Invalid email or password');
+	}
 
 	const valid = await verifyPassword(user.authHash, password);
 	if (!valid) {
@@ -19,7 +39,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 			action: 'DECRYPT_ATTEMPT',
 			success: false,
 			failureReason: 'bad_password',
-			ipAddress: getClientAddress()
+			ipAddress: ip
 		});
 		error(401, 'Invalid email or password');
 	}
