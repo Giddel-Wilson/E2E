@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, json } from '@sveltejs/kit';
 import { eq, and } from 'drizzle-orm';
 import { db, encryptedFiles } from '$server/db';
 import { requireUser } from '$server/auth';
@@ -31,5 +31,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	if (!chunk) error(404, 'Chunk not found');
 
-	return new Response(chunk, { headers: { 'Content-Type': 'application/octet-stream' } });
+	// Base64-in-JSON rather than a raw binary Response body, matching the
+	// upload side — avoids raw octet-stream body edge cases across
+	// runtimes/dev-servers/proxies.
+	return json({ chunk: Buffer.from(new Uint8Array(chunk)).toString('base64') });
 };

@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, json } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db, shareLinks, encryptedFiles } from '$server/db';
 import { filesStore } from '$server/blob-store';
@@ -44,5 +44,5 @@ export const GET: RequestHandler = async ({ params, getClientAddress }) => {
 		});
 	}
 
-	return new Response(chunk, { headers: { 'Content-Type': 'application/octet-stream' } });
+	return json({ chunk: Buffer.from(new Uint8Array(chunk)).toString('base64') });
 };

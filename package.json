@@ -31,6 +31,7 @@
     "@netlify/blobs": "^8.1.0",
     "argon2-browser": "^1.18.0",
     "drizzle-orm": "^0.38.0",
+    "fflate": "^0.8.2",
     "jose": "^5.9.6",
     "libsodium-wrappers-sumo": "0.7.13",
     "lucide-svelte": "^0.468.0",

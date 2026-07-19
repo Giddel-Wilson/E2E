@@ -1,6 +1,12 @@
 import { getStore } from '@netlify/blobs';
 import { env } from '$env/dynamic/private';
 
+/** SHA-256 hex digest, server-side. WebCrypto is available globally in the Node 20 runtime. */
+export async function sha256Hex(data: Uint8Array): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', data as BufferSource);
+	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Returns the 'files' blob store. Inside `netlify dev` or a deployed
  * Netlify Function, context (siteID/token) is auto-injected and no config

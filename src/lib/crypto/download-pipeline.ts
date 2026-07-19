@@ -1,3 +1,4 @@
+import { zipSync } from 'fflate';
 import { fromBase64 } from './encoding';
 import { unwrapFileKey } from './key-encryption';
 import { decryptBlob, decryptChunk, deriveChunkNonce, sha256Hex } from './file-encryption';
@@ -99,7 +100,8 @@ async function fetchAndVerifyChunks(
 		onProgress?.({ phase: 'fetching', percent: (i / record.totalChunks) * 45 });
 		const res = await fetchChunk(i);
 		if (!res.ok) throw new Error(`Failed to fetch chunk ${i} of ${record.totalChunks}`);
-		cipherChunks.push(new Uint8Array(await res.arrayBuffer()));
+		const { chunk } = await res.json();
+		cipherChunks.push(fromBase64(chunk));
 	}
 
 	// A missing hash means the upload's finalize step never completed —
@@ -160,14 +162,14 @@ export async function downloadAndDecryptFile(
 /**
  * Downloads the file WITHOUT decrypting it — verified ciphertext plus a
  * manifest with everything needed to decrypt it later (offline, or with a
- * different tool). Useful for archival, or handing someone an encrypted
- * copy without granting them decrypt access at the same time.
+ * different tool), bundled into a single .zip so there's one download,
+ * not two files a person has to keep track of together.
  */
 export async function downloadRawCiphertext(
 	record: EncryptedFileRecord,
 	fetchChunk: ChunkFetcher = defaultChunkFetcher(record.id),
 	onProgress?: (p: DownloadProgress) => void
-): Promise<{ ciphertext: Blob; manifest: Blob }> {
+): Promise<{ archive: Blob }> {
 	const cipherChunks = await fetchAndVerifyChunks(record, fetchChunk, onProgress);
 	const combined = new Uint8Array(cipherChunks.reduce((n, c) => n + c.length, 0));
 	let offset = 0;
@@ -187,17 +189,32 @@ export async function downloadRawCiphertext(
 		ciphertextSha256: record.ciphertextSha256,
 		totalChunks: record.totalChunks,
 		metadata: record.metadata,
-		note: 'This manifest plus the matching .enc file are needed to decrypt this file later. The wrapped key inside is still encrypted and useless without the owning account\'s private key.'
+		note: "This manifest plus the matching .enc file are needed to decrypt this file later. The wrapped key inside is still encrypted and useless without the owning account's private key."
 	};
+	const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest, null, 2));
+
+	const zipped = zipSync(
+		{
+			'file.enc': combined,
+			'manifest.json': manifestBytes
+		},
+		{ level: 0 } // ciphertext is already high-entropy — compression would only cost time, not space
+	);
 
 	onProgress?.({ phase: 'done', percent: 100 });
-	return {
-		ciphertext: new Blob([combined as BlobPart], { type: 'application/octet-stream' }),
-		manifest: new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' })
-	};
+	return { archive: new Blob([zipped as BlobPart], { type: 'application/zip' }) };
 }
 
 /** Triggers a browser save-as for a Blob. */
+/**
+ * Triggers a browser save-as for a Blob. Revocation of the object URL is
+ * deliberately delayed rather than immediate: calling revokeObjectURL()
+ * synchronously right after click() is a known race condition — on some
+ * browsers/systems the download hasn't finished reading from the blob URL
+ * yet, and revoking it early can silently truncate the saved file. The
+ * click() call itself is synchronous and reliably initiates the download,
+ * so a short delay before cleanup costs nothing and removes the race.
+ */
 export function triggerBrowserDownload(blob: Blob, filename: string) {
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
@@ -206,5 +223,5 @@ export function triggerBrowserDownload(blob: Blob, filename: string) {
 	document.body.appendChild(a);
 	a.click();
 	a.remove();
-	URL.revokeObjectURL(url);
+	setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

@@ -73,11 +73,10 @@
 		downloadError = null;
 		downloadingRawId = record.id;
 		try {
-			const { ciphertext, manifest } = await downloadRawCiphertext(record);
+			const { archive } = await downloadRawCiphertext(record);
 			const meta = decrypted[record.id];
 			const baseName = meta && meta !== 'error' ? meta.name : record.id;
-			triggerBrowserDownload(ciphertext, `${baseName}.enc`);
-			triggerBrowserDownload(manifest, `${baseName}.enc.manifest.json`);
+			triggerBrowserDownload(archive, `${baseName}.enc.zip`);
 		} catch (e) {
 			downloadError = e instanceof Error ? e.message : 'Download failed';
 		} finally {
@@ -213,7 +212,7 @@
 								disabled={downloadingRawId === f.id}
 								class="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
 								aria-label="Download encrypted copy of {meta && meta !== 'error' ? meta.name : 'file'}"
-								title="Download encrypted (.enc) — stays encrypted, no key needed to fetch it"
+								title="Download encrypted (.zip: ciphertext + manifest) — stays encrypted, no key needed to fetch it"
 							>
 								{#if downloadingRawId === f.id}
 									<Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />

@@ -57,6 +57,13 @@ in-browser via `crypto/kdf.ts`, never sent to the server). A leaked
 - **Mandatory integrity verification** — download refuses to proceed if a
   file's ciphertext hash is missing, rather than silently skipping the
   check (this exact gap once let a corrupted upload through undetected).
+- **Write-then-read verification on every chunk upload** — the server
+  reads back what it just stored and compares it against what the client
+  sent, *before* acknowledging the chunk as successful. A same-request
+  "the write call didn't throw" check only proves blob storage accepted
+  the bytes, not that it durably stored the same bytes — this closes that
+  gap immediately, while the original file is still available to retry
+  with, instead of only surfacing as a broken download later.
 - **Password change** — always re-verifies the current password
   server-side and re-wraps the private key client-side; the server never
   sees a usable private key at any point (`/settings/account`).
@@ -118,7 +125,7 @@ Netlify Blobs are private by default (unlike Vercel Blob's public-URL model), so
 - `GET /api/files` — lists the current user's files: wrapped keys, IVs, and encrypted metadata blobs only, never plaintext.
 - `GET /api/files/[id]/chunks/[index]` — streams back one ciphertext chunk from blob storage, ownership-checked.
 - `DELETE /api/files/[id]` — soft-deletes the row and best-effort cleans up blob chunks.
-- `src/lib/crypto/download-pipeline.ts` — unwraps the file key, fetches every chunk, verifies the ciphertext SHA-256 before touching plaintext (hard failure if the hash is missing, not a silent skip), decrypts, and hands back a `Blob`. Also exports `downloadRawCiphertext()` for downloading a file's ciphertext + a decryption manifest without ever decrypting it locally.
+- `src/lib/crypto/download-pipeline.ts` — unwraps the file key, fetches every chunk, verifies the ciphertext SHA-256 before touching plaintext (hard failure if the hash is missing, not a silent skip), decrypts, and hands back a `Blob`. Also exports `downloadRawCiphertext()`, which bundles the ciphertext plus a decryption manifest into a single `.zip` (via `fflate`), without ever decrypting locally.
 - The dashboard decrypts each file's name/size client-side as soon as your key is unlocked. Each row has four actions: download & decrypt, download encrypted (raw `.enc` + manifest), share, delete (behind a real confirmation modal, not `window.confirm`).
 
 ## Sharing

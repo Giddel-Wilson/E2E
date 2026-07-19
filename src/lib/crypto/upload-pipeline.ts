@@ -108,11 +108,12 @@ export async function encryptAndUploadFile({
 
 		const putRes = await fetch(`/api/files/upload`, {
 			method: 'PUT',
-			headers: { 'Content-Type': 'application/octet-stream', 'X-File-Id': fileId, 'X-Chunk-Index': String(i) },
-			body: cipherChunk as BodyInit
+			headers: { 'Content-Type': 'application/json', 'X-File-Id': fileId, 'X-Chunk-Index': String(i) },
+			body: JSON.stringify({ chunk: toBase64(cipherChunk) })
 		});
 		if (!putRes.ok) {
-			throw new Error(`Failed to upload chunk ${i + 1} of ${totalChunks} — please try again`);
+			const body = await putRes.json().catch(() => ({}));
+			throw new Error(body.message ?? `Failed to upload chunk ${i + 1} of ${totalChunks} — please try again`);
 		}
 	}
 

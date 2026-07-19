@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { db, encryptedFiles, fileMetadata } from '$server/db';
 import { requireUser } from '$server/auth';
 import { logAccess } from '$server/access-log';
-import { filesStore } from '$server/blob-store';
+import { filesStore, sha256Hex } from '$server/blob-store';
 import { parseBody } from '$server/validate';
 import { uploadInitSchema, uploadFinalizeSchema } from '$server/schemas';
 import { MAX_FILE_SIZE_BYTES } from '$lib/shared/limits';
@@ -81,7 +81,13 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		.where(and(eq(encryptedFiles.id, fileId), eq(encryptedFiles.ownerId, user.id)));
 	if (!file) error(404, 'Upload session not found — call init first');
 
-	const ciphertext = new Uint8Array(await request.arrayBuffer());
+	// Chunk bytes arrive as base64 inside JSON rather than a raw binary
+	// body — this sidesteps runtime/dev-server edge cases in raw
+	// octet-stream body handling (Bun's fetch/Request implementation is
+	// not the same codebase as Node's and has had binary-body quirks);
+	// base64 text is handled far more uniformly everywhere.
+	const { chunk } = await request.json();
+	const ciphertext = new Uint8Array(Buffer.from(chunk, 'base64'));
 
 	// Stream this chunk straight to blob storage — the server process
 	// never assembles the full plaintext (it never has plaintext at all)
@@ -92,6 +98,23 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	const store = filesStore();
 	const key = `${user.id}/${fileId}/chunk-${chunkIndex}`;
 	await store.set(key, ciphertext.buffer as ArrayBuffer);
+
+	// Read back what was actually persisted and compare it against what
+	// was sent. A same-request "did the write call succeed" check only
+	// proves the server accepted the bytes — it doesn't prove blob
+	// storage durably stored the same bytes it was given, which is
+	// exactly the kind of gap that let a corrupted file through silently
+	// before this check existed. This catches it immediately, while the
+	// original file is still available to retry with, instead of only
+	// surfacing at download time.
+	const readBack = await store.get(key, { type: 'arrayBuffer' });
+	const sentHash = await sha256Hex(ciphertext);
+	const storedHash = readBack ? await sha256Hex(new Uint8Array(readBack)) : null;
+
+	if (!readBack || storedHash !== sentHash) {
+		await store.delete(key).catch(() => {});
+		error(502, `Chunk ${chunkIndex} did not store correctly — please retry the upload`);
+	}
 
 	if (chunkIndex === 0) {
 		await db
