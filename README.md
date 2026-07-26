@@ -9,7 +9,7 @@ server, the database, and blob storage only ever hold ciphertext.
 - SvelteKit 5 (Svelte 5 runes) + TypeScript
 - Tailwind CSS v4
 - Neon Postgres (serverless driver, `drizzle-orm`)
-- Netlify Blobs (ciphertext storage) + Netlify Functions (`adapter-netlify`)
+- Render (Node web service, `adapter-node`) + Backblaze B2 (S3-compatible ciphertext storage)
 - WebCrypto (AES-GCM, RSA-OAEP, ECDH-P256, PBKDF2) + libsodium-wrappers-sumo (ChaCha20-Poly1305, Argon2id)
 - Zod (request validation) · Vitest (crypto round-trip tests)
 
@@ -102,15 +102,17 @@ npm test                # crypto round-trip tests (24 tests, no DB needed)
 npm run check           # svelte-check — type errors across the whole app
 ```
 
-## Deploy to Netlify
+## Deploy to Vercel
 
-1. Install the CLI if you don't have it: `npm install -g netlify-cli`
-2. `netlify link` (or `netlify init` for a brand new site) from the project root.
-3. Add env vars in Site configuration → Environment variables: `DATABASE_URL`, `SESSION_SECRET`. No blob token needed — Netlify Blobs auto-provisions per-site storage with zero manual config.
-4. For local dev, run `netlify dev` instead of `npm run dev` — it wraps Vite and injects the Netlify context (including Blobs access) automatically.
-5. `netlify deploy --prod`. `adapter-netlify` ships routes as standard Node-runtime Netlify Functions (not Edge Functions — the native `@node-rs/argon2` binary and `libsodium-wrappers-sumo` both need full Node). Large-file uploads stay within per-invocation limits because the client streams encrypted chunks (4 MiB) rather than one large request.
+1. **Backblaze B2** (storage): sign up at backblaze.com (no card required for private buckets) → create a bucket, set it **Private** → Account → Application Keys → **Add a New Application Key**, scoped to that bucket → gives you `B2_KEY_ID` and `B2_APPLICATION_KEY`. The bucket's details page shows its **Endpoint** (e.g. `s3.us-west-004.backblazeb2.com`) and region code (e.g. `us-west-004`).
+2. **Vercel**: import the GitHub repo at vercel.com/new. `vercel.json` + `adapter-vercel` in `svelte.config.js` are already set up — Vercel auto-detects the SvelteKit framework preset.
+3. Add env vars in Project Settings → Environment Variables: `DATABASE_URL`, `SESSION_SECRET`, and the five `B2_*` values from step 1. No `ORIGIN`/`ADDRESS_HEADER`/`BODY_SIZE_LIMIT` needed — those were specific to the previous `adapter-node`/Render setup; `adapter-vercel` already knows how to read client IPs and request origin correctly on Vercel's own infrastructure.
+4. For local dev, `npm run dev` works as normal — Backblaze B2 needs no platform-specific wrapper, just the same env vars everywhere.
+5. Push to `main` (or run `vercel --prod`) to deploy.
 
-Netlify Blobs are private by default (unlike Vercel Blob's public-URL model), so ciphertext is only ever readable through your own authenticated routes, never a guessable public link.
+**Why chunks are 2 MiB, not 4 MiB** (`crypto/types.ts`): Vercel Functions have a hard, non-configurable 4.5MB limit on both request and response bodies. Chunks travel as base64-in-JSON (see "why base64" below), which adds ~33% overhead — 4 MiB chunks would encode to ~5.3MB and get rejected with `413: FUNCTION_PAYLOAD_TOO_LARGE` on every single upload and download. 2 MiB chunks encode to ~2.7MB, comfortably under the limit.
+
+Backblaze B2 buckets are private by default, so ciphertext is only ever readable through your own authenticated routes, never a guessable public link.
 
 ## Auth & key flow
 

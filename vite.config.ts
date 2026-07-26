@@ -8,12 +8,11 @@ export default defineConfig({
 		exclude: ['argon2-browser']
 	},
 	server: {
-		// If 5173 is already taken (e.g. a stale dev server from an earlier
-		// terminal), Vite's default behavior is to silently try the next
-		// port instead. That's exactly what breaks `netlify dev`'s proxy —
-		// it only ever forwards to 5173, so it fails with a vague "Could
-		// not proxy request" instead of a clear "port in use" error. Fail
-		// loudly here instead.
+		// Fail loudly if 5173 is already taken instead of silently trying
+		// the next port — a silent port switch is a confusing thing to
+		// debug later (e.g. any reverse proxy or tooling configured to
+		// expect 5173 specifically would otherwise fail in a way that
+		// looks unrelated to the actual cause).
 		strictPort: true
 	},
 	worker: {

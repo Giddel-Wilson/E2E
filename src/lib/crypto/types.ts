@@ -45,6 +45,10 @@ export interface StrengthRating {
 	reasons: string[];
 }
 
-export const CHUNK_SIZE_BYTES = 4 * 1024 * 1024; // 4 MiB per chunk
+// 2 MiB, not 4 MiB: chunks travel as base64-in-JSON (see upload-pipeline.ts),
+// which adds ~33% overhead. 4 MiB chunks would become ~5.3MB encoded —
+// over Vercel's hard, non-configurable 4.5MB request/response body limit
+// for serverless functions. 2 MiB encodes to ~2.7MB, leaving real margin.
+export const CHUNK_SIZE_BYTES = 2 * 1024 * 1024;
 export const FILE_KEY_LENGTH_BITS = 256;
 export const RSA_MODULUS_LENGTH = 4096;

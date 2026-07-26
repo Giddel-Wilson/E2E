@@ -92,9 +92,9 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	// Stream this chunk straight to blob storage — the server process
 	// never assembles the full plaintext (it never has plaintext at all)
 	// and never needs to hold the full ciphertext in memory either.
-	// Netlify Blobs are private by default (unlike Vercel Blob's public
-	// URLs), so ciphertext chunks are only ever reachable through our own
-	// authenticated download route, not a guessable public link.
+	// Backblaze B2 buckets are private by default, so ciphertext chunks
+	// are only ever reachable through our own authenticated download
+	// route, not a guessable public link.
 	const store = filesStore();
 	const key = `${user.id}/${fileId}/chunk-${chunkIndex}`;
 	await store.set(key, ciphertext.buffer as ArrayBuffer);
