@@ -2,23 +2,20 @@ import type { Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { readSessionCookie } from '$server/auth-server';
 
-// Applied in production only — a strict CSP can break Vite's dev-mode
-// HMR websocket and inline eval, which would make local development
-// confusing to debug for no real security benefit (dev builds aren't
-// what's exposed to the internet).
+// Applied in production only — dev builds aren't what's exposed to the
+// internet, and some of these (HSTS especially) make no sense over the
+// plain-HTTP local dev server anyway. Note: Content-Security-Policy is
+// NOT set here — it's configured via `kit.csp` in svelte.config.js
+// instead, so SvelteKit can compute the correct hash for its own inline
+// hydration script on every page. A hardcoded CSP header here previously
+// blocked that script outright, since its content (and therefore its
+// hash) differs per page.
 const SECURITY_HEADERS: Record<string, string> = {
 	'X-Frame-Options': 'DENY',
 	'X-Content-Type-Options': 'nosniff',
 	'Referrer-Policy': 'strict-origin-when-cross-origin',
 	'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-	'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-	// 'unsafe-inline' is kept for style-src because components in this
-	// app use inline style="" attributes for CSS-variable-driven theming
-	// (e.g. dynamic strength-indicator colors) rather than a compiled
-	// stylesheet. Tightening this to nonces/hashes is a reasonable next
-	// step if that pattern is replaced with class-based styling.
-	'Content-Security-Policy':
-		"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+	'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload'
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
