@@ -175,7 +175,7 @@
 			<ul class="mt-4 divide-y divide-[var(--color-border)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)]">
 				{#each files as f (f.id)}
 					{@const meta = decrypted[f.id]}
-					<li class="flex items-center justify-between gap-4 px-5 py-4">
+					<li class="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
 						<div class="flex items-center gap-3 min-w-0">
 							<FileLock2 class="h-4 w-4 shrink-0" style="color: var(--color-text-tertiary)" aria-hidden="true" />
 							<div class="min-w-0">
@@ -193,7 +193,7 @@
 								{/if}
 							</div>
 						</div>
-						<div class="flex items-center gap-1.5 shrink-0">
+						<div class="flex items-center justify-around gap-1.5 sm:shrink-0">
 							<button
 								onclick={() => handleDownload(f)}
 								disabled={!keyStore.isUnlocked || downloadingId === f.id}

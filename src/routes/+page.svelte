@@ -1,19 +1,33 @@
 <script lang="ts">
-	import { ShieldCheck, Lock, KeyRound, Eye, ArrowRight } from 'lucide-svelte';
+	import { ShieldCheck, Lock, KeyRound, Eye, ArrowRight, Menu, X } from 'lucide-svelte';
+
+	let mobileMenuOpen = $state(false);
+
+	function closeMobileMenu() {
+		mobileMenuOpen = false;
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') mobileMenuOpen = false;
+	}
 </script>
+
+<svelte:window onkeydown={mobileMenuOpen ? handleKeydown : undefined} />
 
 <svelte:head>
 	<title>EndToEnd Encrypt — files encrypted before they ever leave your device</title>
 </svelte:head>
 
 <div class="min-h-dvh bg-[var(--color-bg)] text-[var(--color-text-primary)]">
-	<header class="border-b border-[var(--color-border)]">
+	<header class="relative border-b border-[var(--color-border)]">
 		<div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-			<div class="flex items-center gap-2">
+			<a href="/" class="flex items-center gap-2" onclick={closeMobileMenu}>
 				<ShieldCheck class="h-5 w-5" style="color: var(--color-accent)" aria-hidden="true" />
 				<span class="font-semibold tracking-tight">EndToEnd Encrypt</span>
-			</div>
-			<nav class="flex items-center gap-3 text-sm">
+			</a>
+
+			<!-- Desktop nav -->
+			<nav class="hidden items-center gap-3 text-sm sm:flex">
 				<a href="/login" class="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">Sign in</a>
 				<a
 					href="/register"
@@ -23,7 +37,51 @@
 					Create vault
 				</a>
 			</nav>
+
+			<!-- Mobile hamburger -->
+			<button
+				type="button"
+				class="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] cursor-pointer sm:hidden"
+				onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
+				aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+				aria-expanded={mobileMenuOpen}
+			>
+				{#if mobileMenuOpen}
+					<X class="h-5 w-5" aria-hidden="true" />
+				{:else}
+					<Menu class="h-5 w-5" aria-hidden="true" />
+				{/if}
+			</button>
 		</div>
+
+		<!-- Mobile menu panel -->
+		{#if mobileMenuOpen}
+			<button
+				type="button"
+				class="fixed inset-0 top-[65px] z-40 bg-black/50 cursor-default sm:hidden"
+				aria-label="Close menu"
+				onclick={closeMobileMenu}
+			></button>
+			<nav
+				class="absolute inset-x-0 top-full z-50 flex flex-col border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-2 text-sm sm:hidden"
+			>
+				<a
+					href="/login"
+					onclick={closeMobileMenu}
+					class="border-b border-[var(--color-border)] py-3 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+				>
+					Sign in
+				</a>
+				<a
+					href="/register"
+					onclick={closeMobileMenu}
+					class="py-3 font-medium"
+					style="color: var(--color-accent);"
+				>
+					Create vault
+				</a>
+			</nav>
+		{/if}
 	</header>
 
 	<main>
