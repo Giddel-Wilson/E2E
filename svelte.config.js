@@ -36,7 +36,17 @@ const config = {
 					mode: 'auto',
 					directives: {
 						'default-src': ['self'],
-						'script-src': ['self'],
+						// 'wasm-unsafe-eval' (not the much broader 'unsafe-eval')
+					// is required because libsodium-wrappers-sumo compiles a
+					// WebAssembly module at runtime — used for both
+					// ChaCha20-Poly1305 and Argon2id, so this is needed on
+					// essentially every auth flow (Argon2id is the default
+					// password-based KDF for wrapping the private key,
+					// independent of which file-encryption algorithm a user
+					// picked). 'wasm-unsafe-eval' permits WASM compilation
+					// only — it does NOT enable eval()/new Function(), so it
+					// doesn't reopen the XSS risk 'unsafe-eval' would.
+					'script-src': ['self', 'wasm-unsafe-eval'],
 						// 'unsafe-inline' kept for style-src: components use
 						// inline style="" attributes for CSS-variable-driven
 						// theming (e.g. dynamic strength-indicator colors)

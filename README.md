@@ -122,6 +122,8 @@ Backblaze B2 buckets are private by default, so ciphertext is only ever readable
 - `src/lib/stores/key-store.svelte.ts` — holds the unlocked `CryptoKey` objects in memory only, for the current tab. Refreshing the page locks it again by design; `/settings/keys` re-unlocks by re-fetching wrapped material from `/api/auth/keys` and re-deriving the key from a re-entered password.
 - `src/hooks.server.ts` — verifies the session cookie on every request, populates `locals.user`, and applies security headers in production.
 
+**Cross-device access, and what's actually stored where:** the auth hash *and* the wrapped (still-encrypted) private key both live in Neon — nothing account-related is tied to a specific browser or device. Logging in from any device fetches the same wrapped private key and unwraps it locally. The one thing that's *never* stored anywhere — not in Neon, not in `localStorage`, nowhere — is the password itself or the key derived from it via Argon2id; that has to be recomputed fresh from the password on every device, every session, by design. If that computation ever produces different results for the same password on two different machines/environments, that's a bug in the Argon2id derivation path (e.g. a mismatched `libsodium-wrappers-sumo` version between environments), not a storage/architecture issue.
+
 ## Download & decrypt
 
 - `GET /api/files` — lists the current user's files: wrapped keys, IVs, and encrypted metadata blobs only, never plaintext.

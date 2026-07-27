@@ -24,12 +24,23 @@ export async function deriveKey(
 	params: KdfParams,
 	salt?: Uint8Array
 ): Promise<{ key: Uint8Array; salt: Uint8Array }> {
+	// Normalize to a consistent Unicode form before using the password as
+	// crypto input. Without this, the "same" password can encode to
+	// different bytes depending on the OS/keyboard/input method that
+	// typed it — macOS commonly produces decomposed NFD for accented
+	// characters (e.g. 'é' as 'e' + a combining accent), Windows commonly
+	// produces precomposed NFC (a single codepoint) for the visually
+	// identical character. A password that looks identical on two
+	// devices can then silently derive a different key on each — which
+	// looks exactly like "this account only works on the device it was
+	// created on," with no caching or library-version explanation at all.
+	const normalizedPassword = password.normalize('NFC');
 	const usedSalt = salt ?? randomSalt(params.kdf === 'Argon2id' ? 16 : 16);
 
 	if (params.kdf === 'PBKDF2') {
 		const keyMaterial = await crypto.subtle.importKey(
 			'raw',
-			new TextEncoder().encode(password),
+			new TextEncoder().encode(normalizedPassword),
 			'PBKDF2',
 			false,
 			['deriveBits']
@@ -52,7 +63,7 @@ export async function deriveKey(
 	const sodium = await getSodium();
 	const key = sodium.crypto_pwhash(
 		32,
-		password,
+		normalizedPassword,
 		usedSalt.slice(0, sodium.crypto_pwhash_SALTBYTES),
 		params.iterations,
 		params.memoryKib * 1024,
